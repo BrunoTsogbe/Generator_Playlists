@@ -26,7 +26,7 @@ class PlaylistGenerator:
         return False
 
     def authenticate(self, code):
-        """Authentifie Spotify via code"""
+        """Authentifie Spotify via code OAuth"""
         token = self.auth.handle_callback(code)
         if token:
             st.session_state.spotify_token = token
@@ -45,7 +45,7 @@ class PlaylistGenerator:
     def generate_playlist(self, prompt=""):
         """Génère une playlist complète via l'IA + recherche Spotify si possible"""
         prefs = self.get_preferences()
-        analysis = self.ai.analyze_preferences({"name":"User"}, prefs['tracks'], prefs['artists'])
+        analysis = self.ai.analyze_preferences({"name": "User"}, prefs['tracks'], prefs['artists'])
         recs = self.ai.generate_recommendations(analysis, prompt)
 
         tracks = []
@@ -60,13 +60,18 @@ class PlaylistGenerator:
             'tracks': tracks
         }
 
-        # Si Spotify disponible, propose le lien
         playlist_url = None
         if self.pm and tracks:
-            p = self.pm.create(playlist_info['name'], playlist_info['description'], public=False)
+            # Correction : méthode correcte
+            p = self.pm.create_playlist(
+                playlist_info['name'],
+                description=playlist_info['description'],
+                public=False
+            )
             if p:
                 uris = [t['uri'] for t in tracks]
                 self.pm.add_tracks(p['id'], uris)
-                playlist_url = p['url']
+                # URL Spotify correcte
+                playlist_url = p.get('external_urls', {}).get('spotify')
 
         return playlist_info, playlist_url
