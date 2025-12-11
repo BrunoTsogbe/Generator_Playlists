@@ -1,18 +1,22 @@
 import streamlit as st
 from spotify_auth import SpotifyAuthManager, SpotifyDataFetcher, PlaylistManager
-from groq_recommender import GroqRecommender
-from config import DEFAULT_PLAYLIST_SIZE
+from ai import GroqRecommender
 
 class PlaylistGenerator:
+    """Backend : chat IA + création playlist Spotify optionnelle"""
+
     def __init__(self):
         self.auth = SpotifyAuthManager()
         self.ai = GroqRecommender()
         self.sp = None
         self.fetcher = None
         self.pm = None
-    
+        if st.session_state.get("spotify_token"):
+            self.setup()
+
     def setup(self):
-        token = st.session_state.get('spotify_token')
+        """Initialisation Spotify si token existant"""
+        token = st.session_state.get("spotify_token")
         if token:
             self.sp = self.auth.get_client(token)
             if self.sp:
@@ -20,61 +24,49 @@ class PlaylistGenerator:
                 self.pm = PlaylistManager(self.sp)
                 return True
         return False
-    
+
     def authenticate(self, code):
+        """Authentifie Spotify via code"""
         token = self.auth.handle_callback(code)
         if token:
             st.session_state.spotify_token = token
             return self.setup()
         return False
-    
+
     def get_preferences(self):
+        """Récupère top tracks/artists si connecté"""
         if not self.fetcher:
-            return None
+            return {'tracks': [], 'artists': []}
         return {
             'tracks': self.fetcher.get_top_tracks(),
             'artists': self.fetcher.get_top_artists()
         }
-    
-    def generate(self, theme="", size=DEFAULT_PLAYLIST_SIZE):
-        if not self.fetcher or not self.pm:
-            st.error("Non authentifié")
-            return None
+
+    def generate_playlist(self, prompt=""):
+        """Génère une playlist complète via l'IA + recherche Spotify si possible"""
         prefs = self.get_preferences()
-        if not prefs:
-            st.error("Impossible de récupérer vos préférences")
-            return None
-        st.info("🧠 Analyse en cours...")
         analysis = self.ai.analyze_preferences({"name":"User"}, prefs['tracks'], prefs['artists'])
-        st.info("🎵 Génération des requêtes...")
-        recs = self.ai.generate_recommendations(analysis, theme)
-        st.info("🔍 Recherche des tracks...")
-        all_tracks = []
-        for query in recs.get('queries',[]):
-            tracks = self.fetcher.search_tracks(query)
-            all_tracks.extend(tracks)
-            if len(all_tracks)>=size:
-                break
-        all_tracks = all_tracks[:size]
-        if not all_tracks:
-            st.error("Aucune track trouvée")
-            return None
-        return {
-            'name': recs.get('name','My Playlist'),
-            'description': analysis.get('vibe',''),
-            'tracks': all_tracks
+        recs = self.ai.generate_recommendations(analysis, prompt)
+
+        tracks = []
+        if self.fetcher:
+            for query in recs.get('queries', []):
+                results = self.fetcher.search_tracks(query)
+                tracks.extend(results)
+
+        playlist_info = {
+            'name': recs.get('name', 'Ma Playlist'),
+            'description': analysis.get('vibe', ''),
+            'tracks': tracks
         }
-    
-    def export(self, playlist_info, public=False):
-        if not self.pm:
-            st.error("Non authentifié")
-            return False
-        p = self.pm.create(playlist_info['name'], playlist_info['description'], public)
-        if not p:
-            return False
-        uris = [t['uri'] for t in playlist_info['tracks']]
-        if self.pm.add_tracks(p['id'], uris):
-            st.success("✅ Playlist créée!")
-            st.markdown(f"[🎵 Play sur Spotify]({p['url']})")
-            return True
-        return False
+
+        # Si Spotify disponible, propose le lien
+        playlist_url = None
+        if self.pm and tracks:
+            p = self.pm.create(playlist_info['name'], playlist_info['description'], public=False)
+            if p:
+                uris = [t['uri'] for t in tracks]
+                self.pm.add_tracks(p['id'], uris)
+                playlist_url = p['url']
+
+        return playlist_info, playlist_url
