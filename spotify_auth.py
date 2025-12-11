@@ -46,59 +46,52 @@ class SpotifyAuthManager:
             st.error(f"Erreur refresh Spotify: {e}")
             return None
 
+
 class SpotifyDataFetcher:
     def __init__(self, sp):
         self.sp = sp
 
-    def get_user_profile(self):
-        try:
-            user = self.sp.current_user()
-            return {
-                'name': user.get('display_name', 'User'),
-                'url': user.get('external_urls', {}).get('spotify', ''),
-                'followers': user.get('followers', {}).get('total', 0)
-            }
-        except:
-            return {'name':'User','url':'','followers':0}
-
     def get_top_tracks(self, limit=TRACKS_LIMIT):
         try:
             results = self.sp.current_user_top_tracks(limit=limit)
-            return [{'name': t['name'], 'artist': ', '.join(a['name'] for a in t['artists']), 'uri': t['uri']} for t in results.get('items',[])]
-        except:
+            return results.get('items', [])
+        except Exception as e:
+            st.error(f"Erreur récupération tracks: {e}")
             return []
 
     def get_top_artists(self, limit=ARTISTS_LIMIT):
         try:
             results = self.sp.current_user_top_artists(limit=limit)
-            return [{'name': a['name'], 'genres': a.get('genres',[])[:3]} for a in results.get('items',[])]
-        except:
+            return results.get('items', [])
+        except Exception as e:
+            st.error(f"Erreur récupération artists: {e}")
             return []
 
     def search_tracks(self, query, limit=SEARCH_LIMIT):
         try:
             results = self.sp.search(q=query, type='track', limit=limit)
-            return [{'name': t['name'], 'artist': ', '.join(a['name'] for a in t['artists']), 'uri': t['uri']} for t in results.get('tracks',{}).get('items',[])]
-        except:
+            return results.get('tracks', {}).get('items', [])
+        except Exception as e:
+            st.error(f"Erreur recherche: {e}")
             return []
+
 
 class PlaylistManager:
     def __init__(self, sp):
         self.sp = sp
 
-    def create(self, name, description="", public=False):
+    def create_playlist(self, name, description=""):
         try:
-            user_id = self.sp.current_user()['id']
-            p = self.sp.user_playlist_create(user_id, name, public=public, description=description[:300])
-            return {'id': p['id'], 'name': p['name'], 'url': p.get('external_urls', {}).get('spotify','')}
+            user = self.sp.current_user()
+            playlist = self.sp.user_playlist_create(user['id'], name, public=True, description=description)
+            return playlist
         except Exception as e:
             st.error(f"Erreur création playlist: {e}")
             return None
 
-    def add_tracks(self, playlist_id, track_uris):
+    def add_tracks(self, playlist_id, track_ids):
         try:
-            for i in range(0, len(track_uris), 100):
-                self.sp.playlist_add_items(playlist_id, track_uris[i:i+100])
+            self.sp.playlist_add_items(playlist_id, track_ids)
             return True
         except Exception as e:
             st.error(f"Erreur ajout tracks: {e}")
