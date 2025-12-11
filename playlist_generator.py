@@ -3,7 +3,6 @@ from spotify_auth import SpotifyAuthManager, SpotifyDataFetcher, PlaylistManager
 from ai import GroqRecommender
 
 class PlaylistGenerator:
-    """Backend : chat IA + création playlist Spotify optionnelle"""
 
     def __init__(self):
         self.auth = SpotifyAuthManager()
@@ -62,7 +61,6 @@ class PlaylistGenerator:
 
         playlist_url = None
         if self.pm and tracks:
-            # Correction : méthode correcte
             p = self.pm.create_playlist(
                 playlist_info['name'],
                 description=playlist_info['description'],

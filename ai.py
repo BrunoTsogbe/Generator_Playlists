@@ -1,6 +1,15 @@
 from groq import Groq
 from config import GROQ_API_KEY, GROQ_MODEL, GROQ_TEMPERATURE, GROQ_MAX_TOKENS
 
+def load_context(file_path="context.txt"):
+    """Charge le contexte du bot depuis context.txt"""
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        # Contexte par défaut si fichier absent ou erreur
+        return "Tu es un assistant appelé Jarvis, amical et utile."
+
 class GroqRecommender:
     """IA pour chat et recommandations playlist"""
 
@@ -8,22 +17,24 @@ class GroqRecommender:
         if not GROQ_API_KEY:
             raise ValueError("GROQ_API_KEY manquante")
         self.client = Groq(api_key=GROQ_API_KEY)
-        self.model = GROQ_MODEL  # Assure-toi que le modèle est actif
+        self.model = GROQ_MODEL
+        self.context = load_context()  # charge le contexte pour le nom et personnalité
 
     def chat(self, message: str) -> str:
+        """Renvoie la réponse du bot à un message utilisateur"""
         if not message.strip():
             return "Message vide."
         try:
             resp = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "Tu es un assistant utile et amical."},
+                    {"role": "system", "content": self.context},  # utilise context.txt
                     {"role": "user", "content": message}
                 ],
                 temperature=GROQ_TEMPERATURE,
                 max_tokens=GROQ_MAX_TOKENS
             )
-            # Compatible avec la plupart des versions SDK
+            # Compatible avec différentes versions SDK
             content = resp.choices[0].message.content if hasattr(resp.choices[0], 'message') else resp.choices[0].content
             return content.strip()
         except Exception as e:
@@ -39,7 +50,7 @@ class GroqRecommender:
         )
         return {
             "vibe": self.chat(prompt),
-            "queries": ["chill", "pop", "afrobeat"],  # par défaut
+            "queries": ["chill", "pop", "afrobeat"],  # par défaut si non connecté
             "name": "Ma Playlist"
         }
 
